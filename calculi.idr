@@ -20,6 +20,9 @@ data Formula : Type where
 ∧ : Formula -> Formula -> Formula
 ∧ x y = And x y
 
+∨ : Formula -> Formula -> Formula
+∨ x y = Or x y
+
 ⊥ : Formula
 ⊥ = Bot
 
@@ -77,7 +80,7 @@ data Step : List Formula -> (f : Formula) -> (g : Formula) -> Type where
   Start     : Step [] Top Top
   OneRule   : Step xs a b -> (Derivation xs b -> Derivation ys c) -> Step ys a c
   TwoRule   : (Step xs a b, Step ys a c) -> (Derivation xs b -> Derivation ys c -> Derivation zs d) -> Step zs a d
-  ThreeRule : (Derivation xs b -> Derivation ys c -> Derivation zs d -> Derivation us e) -> (Step xs a b, Step ys a c, Step zs a d) -> Step us a e
+  ThreeRule : (Step xs a b, Step ys a c, Step zs a d) -> (Derivation xs b -> Derivation ys c -> Derivation zs d -> Derivation us e) -> Step us a e
 
 (~~) : Step xs a b -> (Derivation xs b -> Derivation ys c) -> Step ys a c
 (~~) = OneRule
@@ -85,7 +88,7 @@ data Step : List Formula -> (f : Formula) -> (g : Formula) -> Type where
 (~~~) : (Step xs a b, Step ys a c) -> (Derivation xs b -> Derivation ys c -> Derivation zs d) -> Step zs a d
 (~~~) = TwoRule
 
-(~~~~) : (step : Derivation xs b -> Derivation ys c -> Derivation zs d -> Derivation us e) -> (Step xs a b, Step ys a c, Step zs a d) -> Step us a e
+(~~~~) : (Step xs a b, Step ys a c, Step zs a d) -> (Derivation xs b -> Derivation ys c -> Derivation zs d -> Derivation us e) -> Step us a e
 (~~~~) = ThreeRule
 
 infixl 5 ~~
@@ -105,7 +108,6 @@ ex1 =
   ~~ (HeadAsmp 1)
   -- [¬ p, p] `⊢` ⊥
   ~~ NegI
-  -- [¬ p, p] `⊢` ¬(¬ p)
   where
     left : [p] `⊢` p
     left = assume p
@@ -117,6 +119,7 @@ ex2 : {p : Formula} -> [¬ (¬ (¬ p))] `⊢` (¬ p)
 ex2 = 
   (left, right)
   ~~~ NegE
+  -- [p, ¬ (¬ (¬ p))] `⊢` ⊥
   ~~ NegI
   where
     right : [¬ (¬ (¬ p))] `⊢` (¬ (¬ (¬ p)))
@@ -131,9 +134,24 @@ ex3 : {p, q, r : Formula} -> [r, (r `→` q), p `→` (¬ q)] `⊢` (¬ p)
 ex3 =
   (
     (assume r, assume (r `→` q)) ~~~ ImpE,
+    -- [r, r `→` q] `⊢` q
     (assume p, assume (p `→` (¬ q))) ~~~ ImpE
+    -- [p, p `→` (¬ q)] `⊢` ¬ q
   )
   ~~~ NegE
+    -- [r, r `→` q, p, p `→` (¬ q)] `⊢` ⊥
   ~~ (HeadAsmp 2)
+    -- [p, r, r `→` q, p `→` (¬ q)] `⊢` ⊥
   ~~ NegI
 
+ex4 : {p, q : Formula} -> [¬ p] `⊢` (p `→` q)
+ex4 =
+  (assume p, assume $ ¬ p)
+  ~~~ NegE
+  -- [p, ¬ p] `⊢` ⊥
+  ~~ (EFQ q)
+  -- [p, ¬ p] `⊢` q
+  ~~ ImpI
+
+ex5 : {p, q : Formula} -> [] `⊢` ((p `→` q) `∨` (q `→` p))
+ex5 = ?ex5_rhs
