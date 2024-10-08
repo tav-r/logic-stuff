@@ -20,6 +20,9 @@ data Formula : Type where
 ∧ : Formula -> Formula -> Formula
 ∧ x y = And x y
 
+⊥ : Formula
+⊥ = Bot
+
 shiftN : Nat -> (l : List a) -> {auto prf : NonEmpty l} -> List a
 shiftN _ [] impossible
 shiftN 0 b@(x :: xs) = b
@@ -56,7 +59,7 @@ data Derivation : List Formula -> Formula -> Type where
   OrIL : Derivation as f -> (g : Formula) -> Derivation as (Or g f)
   OrIR : Derivation as f -> (g : Formula) -> Derivation as (Or f g)
 
-  ImpE : Derivation as (If f g) -> Derivation bs f -> Derivation (as ++ bs) g
+  ImpE : Derivation as f -> Derivation bs (If f g) -> Derivation (as ++ bs) g
   ImpI : Derivation (f :: as) g -> Derivation as (If f g)
 
   -- structural rules
@@ -73,13 +76,13 @@ data Derivation : List Formula -> Formula -> Type where
 data Step : List Formula -> (f : Formula) -> (g : Formula) -> Type where
   Start     : Step [] Top Top
   OneRule   : Step xs a b -> (Derivation xs b -> Derivation ys c) -> Step ys a c
-  TwoRule   : (Derivation xs b -> Derivation ys c -> Derivation zs d) -> (Step xs a b, Step ys a c) -> Step zs a d
+  TwoRule   : (Step xs a b, Step ys a c) -> (Derivation xs b -> Derivation ys c -> Derivation zs d) -> Step zs a d
   ThreeRule : (Derivation xs b -> Derivation ys c -> Derivation zs d -> Derivation us e) -> (Step xs a b, Step ys a c, Step zs a d) -> Step us a e
 
-(~~) : Step xs a b -> (step : Derivation xs b -> Derivation ys c) -> Step ys a c
+(~~) : Step xs a b -> (Derivation xs b -> Derivation ys c) -> Step ys a c
 (~~) = OneRule
 
-(~~~) : (Derivation xs b -> Derivation ys c -> Derivation zs d) -> (Step xs a b, Step ys a c) -> Step zs a d
+(~~~) : (Step xs a b, Step ys a c) -> (Derivation xs b -> Derivation ys c -> Derivation zs d) -> Step zs a d
 (~~~) = TwoRule
 
 (~~~~) : (step : Derivation xs b -> Derivation ys c -> Derivation zs d -> Derivation us e) -> (Step xs a b, Step ys a c, Step zs a d) -> Step us a e
@@ -91,46 +94,46 @@ infixl 5 ~~~
 ⊢ : List Formula -> Formula -> Type
 ⊢ fs f = Step fs Top f
 
-th1 : {a, b : Formula} -> [] `⊢` (((a `∧` b) `→` a) `∧` ((a `∧` b) `→` b))
-th1 = AndI ~~~ (left, right)
-  where
-    left : [] `⊢` ((a `∧` b) `→` a)
-    left = Start
-      ~~(Assume((a `∧` b)))
-      ~~(AndEL)
-      ~~(ImpI)
-
-    right : [] `⊢` ((a `∧` b) `→` b)
-    right = Start
-      ~~(Assume((a `∧` b)))
-      ~~(AndER)
-      ~~(ImpI)
+assume : (f : Formula) -> Step [f] Top f
+assume f = OneRule Start $ Assume f
 
 ex1 : {p : Formula} -> [p] `⊢` (¬(¬ p))
-ex1 = NegE ~~~ (left, right)
-  -- Bot, [p, ¬ p]
+ex1 = 
+  (left, right)
+  ~~~ NegE
+  -- [p, ¬ p] `⊢` ⊥
   ~~ (HeadAsmp 1)
-  -- Bot, [¬ p, p]
+  -- [¬ p, p] `⊢` ⊥
   ~~ NegI
-  -- ¬(¬ p), [p]
+  -- [¬ p, p] `⊢` ¬(¬ p)
   where
     left : [p] `⊢` p
-    left = Start
-      ~~(Assume p)
+    left = assume p
 
     right : [¬ p] `⊢` ¬ p
-    right = Start
-      ~~(Assume $ ¬ p)
+    right = assume $ ¬ p
 
--- there should also be an intuitionistic proof of this...
 ex2 : {p : Formula} -> [¬ (¬ (¬ p))] `⊢` (¬ p)
-ex2 = NegE ~~~ (left, right) ~~ CR
+ex2 = 
+  (left, right)
+  ~~~ NegE
+  ~~ NegI
   where
     right : [¬ (¬ (¬ p))] `⊢` (¬ (¬ (¬ p)))
-    right = Start
-      ~~(Assume (¬(¬(¬ p))))
+    right = assume $ ¬ (¬ (¬ p))
 
-    left : [¬ (¬ p)] `⊢` (¬ (¬ p))
-    left = Start
-      ~~(Assume (¬(¬ p)))
+    left  : [p] `⊢` (¬ (¬ p))
+    left = 
+      ((assume p), (ex1 ~~ ImpI))
+      ~~~ ImpE
+
+ex3 : {p, q, r : Formula} -> [r, (r `→` q), p `→` (¬ q)] `⊢` (¬ p)
+ex3 =
+  (
+    (assume r, assume (r `→` q)) ~~~ ImpE,
+    (assume p, assume (p `→` (¬ q))) ~~~ ImpE
+  )
+  ~~~ NegE
+  ~~ (HeadAsmp 2)
+  ~~ NegI
 
