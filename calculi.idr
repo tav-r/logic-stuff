@@ -45,8 +45,6 @@ data Derivation : List Formula -> Formula -> Type where
 
   HeadAsmp : (n : Nat) -> Derivation as f -> Derivation (headNth n as) f
 
-  Assume : (g : Formula) -> Derivation as f -> Derivation (g :: as) g
-
   NegI : Derivation (f::as) Bot -> Derivation as (Not f)
   NegE : Derivation as f -> Derivation bs (Not f) -> Derivation (as ++ bs) Bot
 
@@ -61,6 +59,16 @@ data Derivation : List Formula -> Formula -> Type where
   ImpE : Derivation as (If f g) -> Derivation bs f -> Derivation (as ++ bs) g
   ImpI : Derivation (f :: as) g -> Derivation as (If f g)
 
+  -- structural rules
+  THIN : Derivation as f -> Derivation bs g -> Derivation as f
+  Assume : (g : Formula) -> Derivation as f -> Derivation (g :: as) g
+
+  -- intuitionistic rules
+  EFQ : (f : Formula) -> Derivation as Bot -> Derivation as f
+
+  -- 'classical' rules
+  TND : (a : Formula) -> (b : Formula) -> Derivation [] (Or a b)
+  CR  : Derivation ((Not p)::as) Bot -> Derivation as p
 
 data Step : List Formula -> (f : Formula) -> (g : Formula) -> Type where
   Start     : Step [] Top Top
@@ -88,28 +96,41 @@ th1 = AndI ~~~ (left, right)
   where
     left : [] `⊢` ((a `∧` b) `→` a)
     left = Start
-           ~~(Assume((a `∧` b)))
-           ~~(AndEL)
-           ~~(ImpI)
+      ~~(Assume((a `∧` b)))
+      ~~(AndEL)
+      ~~(ImpI)
 
     right : [] `⊢` ((a `∧` b) `→` b)
     right = Start
-            ~~(Assume((a `∧` b)))
-            ~~(AndER)
-            ~~(ImpI)
+      ~~(Assume((a `∧` b)))
+      ~~(AndER)
+      ~~(ImpI)
 
 ex1 : {p : Formula} -> [p] `⊢` (¬(¬ p))
 ex1 = NegE ~~~ (left, right)
-      -- Bot, [p, ¬ p]
-      ~~ (HeadAsmp 1)
-      -- Bot, [¬ p, p]
-      ~~ NegI
-      -- ¬(¬ p), [p]
+  -- Bot, [p, ¬ p]
+  ~~ (HeadAsmp 1)
+  -- Bot, [¬ p, p]
+  ~~ NegI
+  -- ¬(¬ p), [p]
   where
-    right : [¬ p] `⊢` ¬ p
-    right = Start
-            ~~(Assume $ ¬ p)
-
     left : [p] `⊢` p
     left = Start
-           ~~(Assume p)
+      ~~(Assume p)
+
+    right : [¬ p] `⊢` ¬ p
+    right = Start
+      ~~(Assume $ ¬ p)
+
+-- there should also be an intuitionistic proof of this...
+ex2 : {p : Formula} -> [¬ (¬ (¬ p))] `⊢` (¬ p)
+ex2 = NegE ~~~ (left, right) ~~ CR
+  where
+    right : [¬ (¬ (¬ p))] `⊢` (¬ (¬ (¬ p)))
+    right = Start
+      ~~(Assume (¬(¬(¬ p))))
+
+    left : [¬ (¬ p)] `⊢` (¬ (¬ p))
+    left = Start
+      ~~(Assume (¬(¬ p)))
+
