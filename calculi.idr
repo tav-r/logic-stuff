@@ -36,7 +36,7 @@ simpleShiftN : shiftN 3 [0, 1, 2, 3] = [1, 2, 3, 0]
 simpleShiftN = Refl
 
 headNth : Nat -> (l : List a) -> List a
-headNth = \n => headNthHelp n n
+headNth = (uncurry headNthHelp) . dup
   where
     headNthHelp : Nat -> Nat -> (l : List a) -> List a
     headNthHelp k 0 l = l
@@ -98,7 +98,7 @@ infixl 5 ~~~
 infixl 5 ~~~~
 
 ⊢ : List Formula -> Formula -> Type
-⊢ fs f = Step fs Top f
+⊢ = (flip Step) Top
 
 assume : (f : Formula) -> Step [f] Top f
 assume f = OneRule Start $ Assume f
