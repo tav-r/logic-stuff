@@ -58,9 +58,9 @@ data Derivation : List Formula -> Formula -> Type where
   AndER : Derivation as (And f g) -> Derivation as g
   AndI  : Derivation as f -> Derivation bs g -> Derivation (as ++ bs) (And f g)
 
-  OrE  : Derivation (f::bs) h -> Derivation (g::cs) h -> Derivation as (Or f g) -> Derivation (as ++ bs ++ cs) h
-  OrIL : Derivation as f -> (g : Formula) -> Derivation as (Or g f)
-  OrIR : Derivation as f -> (g : Formula) -> Derivation as (Or f g)
+  OrE  : Derivation (f::bs) h -> Derivation (g::cs) h -> Derivation as (Or f g) -> Derivation (bs ++ cs ++ as) h
+  OrIL : (g : Formula) -> Derivation as f -> Derivation as (Or g f)
+  OrIR : (g : Formula) -> Derivation as f -> Derivation as (Or f g)
 
   ImpE : Derivation as f -> Derivation bs (If f g) -> Derivation (as ++ bs) g
   ImpI : Derivation (f :: as) g -> Derivation as (If f g)
@@ -73,7 +73,9 @@ data Derivation : List Formula -> Formula -> Type where
   EFQ : (f : Formula) -> Derivation as Bot -> Derivation as f
 
   -- 'classical' rules
-  TND : (a : Formula) -> (b : Formula) -> Derivation [] (Or a b)
+  TNDL : (a : Formula) -> Derivation as f -> Derivation as (Or a (Not a))
+  TNDR : (a : Formula) -> Derivation as f -> Derivation as (Or (Not a) a)
+
   CR  : Derivation ((Not p)::as) Bot -> Derivation as p
 
 data Step : List Formula -> (f : Formula) -> (g : Formula) -> Type where
@@ -93,6 +95,7 @@ data Step : List Formula -> (f : Formula) -> (g : Formula) -> Type where
 
 infixl 5 ~~
 infixl 5 ~~~
+infixl 5 ~~~~
 
 ⊢ : List Formula -> Formula -> Type
 ⊢ fs f = Step fs Top f
@@ -132,17 +135,20 @@ ex2 =
 
 ex3 : {p, q, r : Formula} -> [r, (r `→` q), p `→` (¬ q)] `⊢` (¬ p)
 ex3 =
-  (
-    (assume r, assume (r `→` q)) ~~~ ImpE,
-    -- [r, r `→` q] `⊢` q
-    (assume p, assume (p `→` (¬ q))) ~~~ ImpE
-    -- [p, p `→` (¬ q)] `⊢` ¬ q
-  )
+  (left, right)
   ~~~ NegE
     -- [r, r `→` q, p, p `→` (¬ q)] `⊢` ⊥
   ~~ (HeadAsmp 2)
     -- [p, r, r `→` q, p `→` (¬ q)] `⊢` ⊥
   ~~ NegI
+  where
+    left : [r, r `→` q] `⊢` q
+    left = 
+      (assume r, assume (r `→` q)) ~~~ ImpE
+
+    right : [p, p `→` (¬ q)] `⊢` ¬ q
+    right =
+      (assume p, assume (p `→` (¬ q))) ~~~ ImpE
 
 ex4 : {p, q : Formula} -> [¬ p] `⊢` (p `→` q)
 ex4 =
@@ -154,4 +160,29 @@ ex4 =
   ~~ ImpI
 
 ex5 : {p, q : Formula} -> [] `⊢` ((p `→` q) `∨` (q `→` p))
-ex5 = ?ex5_rhs
+ex5 =
+  (left, right, Start ~~ (TNDR p))
+  ~~~~ OrE
+  where
+    left : [¬ p] `⊢` ((p `→` q) `∨` (q `→` p))
+    left =
+      (assume p, assume $ ¬ p)
+      ~~~ (NegE)
+      -- [p, ¬ p] `⊢` ⊥
+      ~~ (EFQ q)
+      -- [p, ¬ p] `⊢` q
+      ~~ (ImpI)
+      -- [¬ p] `⊢` (p `→` q)
+      ~~ (OrIR(q `→` p))
+
+    right : [p] `⊢`  ((p `→` q) `∨` (q `→` p))
+    right =
+      assume q
+      -- [q] `⊢` q
+      ~~(Assume p)
+      -- [p, q] `⊢` p
+      ~~(HeadAsmp 1)
+      -- [q, p] `⊢` p
+      ~~(ImpI)
+      -- [p] `⊢` (q `→` p)
+      ~~(OrIL(p `→` q))
