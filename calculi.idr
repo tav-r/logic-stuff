@@ -93,9 +93,13 @@ data Step : List Formula -> (f : Formula) -> (g : Formula) -> Type where
 (~~~~) : (Step xs a b, Step ys a c, Step zs a d) -> (Derivation xs b -> Derivation ys c -> Derivation zs d -> Derivation us e) -> Step us a e
 (~~~~) = ThreeRule
 
+(.|) : (a -> b) -> (b -> c) -> (a -> c)
+(.|) = flip (.)
+
 infixl 5 ~~
 infixl 5 ~~~
 infixl 5 ~~~~
+infixl 9 .|
 
 ⊢ : List Formula -> Formula -> Type
 ⊢ = (flip Step) Top
@@ -175,7 +179,7 @@ ex5 =
       -- [¬ p] `⊢` (p `→` q)
       ~~ (OrIR(q `→` p))
 
-    right : [p] `⊢`  ((p `→` q) `∨` (q `→` p))
+    right : [p] `⊢` ((p `→` q) `∨` (q `→` p))
     right =
       assume q
       -- [q] `⊢` q
