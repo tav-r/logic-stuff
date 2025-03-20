@@ -93,19 +93,15 @@ data Step : List Formula -> (f : Formula) -> (g : Formula) -> Type where
 (~~~~) : (Step xs a b, Step ys a c, Step zs a d) -> (Derivation xs b -> Derivation ys c -> Derivation zs d -> Derivation us e) -> Step us a e
 (~~~~) = ThreeRule
 
-(.|) : (a -> b) -> (b -> c) -> (a -> c)
-(.|) = flip (.)
-
 infixl 5 ~~
 infixl 5 ~~~
 infixl 5 ~~~~
-infixl 9 .|
 
 ⊢ : List Formula -> Formula -> Type
 ⊢ = (flip Step) Top
 
-assume : (f : Formula) -> Step [f] Top f
-assume f = OneRule Start $ Assume f
+∵ : (Derivation [] Top -> Derivation ys c) -> Step ys Top c
+∵ f = OneRule Start f
 
 ex1 : {p : Formula} -> [p] `⊢` (¬(¬ p))
 ex1 = 
@@ -117,25 +113,20 @@ ex1 =
   ~~ NegI
   where
     left : [p] `⊢` p
-    left = assume p
+    left = ∵ (Assume p)
 
     right : [¬ p] `⊢` ¬ p
-    right = assume $ ¬ p
+    right = ∵ (Assume $ ¬ p)
 
 ex2 : {p : Formula} -> [¬ (¬ (¬ p))] `⊢` (¬ p)
 ex2 = 
-  (left, right)
+  (ex1, right)
   ~~~ NegE
   -- [p, ¬ (¬ (¬ p))] `⊢` ⊥
   ~~ NegI
   where
     right : [¬ (¬ (¬ p))] `⊢` (¬ (¬ (¬ p)))
-    right = assume $ ¬ (¬ (¬ p))
-
-    left  : [p] `⊢` (¬ (¬ p))
-    left = 
-      ((assume p), (ex1 ~~ ImpI))
-      ~~~ ImpE
+    right = ∵ (Assume (¬ (¬ (¬ p))))
 
 ex3 : {p, q, r : Formula} -> [r, (r `→` q), p `→` (¬ q)] `⊢` (¬ p)
 ex3 =
@@ -148,15 +139,15 @@ ex3 =
   where
     left : [r, r `→` q] `⊢` q
     left = 
-      (assume r, assume (r `→` q)) ~~~ ImpE
+      (∵ $ Assume r, ∵ $ Assume (r `→` q)) ~~~ ImpE
 
     right : [p, p `→` (¬ q)] `⊢` ¬ q
     right =
-      (assume p, assume (p `→` (¬ q))) ~~~ ImpE
+      (∵ $ Assume p, ∵ $ Assume (p `→` (¬ q))) ~~~ ImpE
 
 ex4 : {p, q : Formula} -> [¬ p] `⊢` (p `→` q)
 ex4 =
-  (assume p, assume $ ¬ p)
+  (∵ $ Assume p, ∵ $ Assume (¬ p))
   ~~~ NegE
   -- [p, ¬ p] `⊢` ⊥
   ~~ (EFQ q)
@@ -170,7 +161,7 @@ ex5 =
   where
     left : [¬ p] `⊢` ((p `→` q) `∨` (q `→` p))
     left =
-      (assume p, assume $ ¬ p)
+      (∵ $ Assume p, ∵ $ Assume (¬ p))
       ~~~ (NegE)
       -- [p, ¬ p] `⊢` ⊥
       ~~ (EFQ q)
@@ -181,7 +172,7 @@ ex5 =
 
     right : [p] `⊢` ((p `→` q) `∨` (q `→` p))
     right =
-      assume q
+      ∵ (Assume q)
       -- [q] `⊢` q
       ~~(Assume p)
       -- [p, q] `⊢` p
