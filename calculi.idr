@@ -26,8 +26,8 @@ data Formula : Type where
 ⊥ : Formula
 ⊥ = Bot
 
-shiftN : Nat -> (l : List a) -> {auto prf : NonEmpty l} -> List a
-shiftN _ [] impossible
+shiftN : Nat -> (l : List a) -> List a
+shiftN _ [] = []
 shiftN 0 b@(x :: xs) = b
 shiftN (S n) b@(x :: []) = [x]
 shiftN (S n) b@(x :: (y::ys)) = y :: (shiftN n (x::ys))
@@ -96,6 +96,7 @@ data Derivation : List Formula -> Strength -> Formula -> Type where
 
   CR  : Derivation ((Not p)::as) _ Bot -> Derivation as Classical p
 
+
 data Step : List Formula -> Strength -> (f : Formula) -> (g : Formula) -> Type where
   Start     : Step [] Weakest Top Top
   OneRule   : Step xs s a b -> (Derivation xs s b -> Derivation ys t c) -> Step ys (max s t) a c
@@ -119,7 +120,6 @@ infixl 5 |?~
 infixl 5 |~
 infixl 5 |!~
 infixl 5 |.~
-infixl 5 ~?
 
 (|?~) : List Formula -> Strength -> Formula -> Type
 (|?~) = curry $ (flip . uncurry $ Step) Top
