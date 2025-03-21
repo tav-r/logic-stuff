@@ -46,64 +46,99 @@ headNth = (uncurry headNthHelp) . dup
 simpleHeadNth : headNth 3 [0, 1, 2, 3, 4, 5] = [3, 0, 1, 2, 4, 5]
 simpleHeadNth = Refl
 
-data Derivation : List Formula -> Formula -> Type where
-  Empty : Derivation [] Top
+data Strength = Minimal | Intuitionistic | Classical
 
-  HeadAsmp : (n : Nat) -> Derivation as f -> Derivation (headNth n as) f
+Eq Strength where
+  (==) Minimal Minimal = True
+  (==) Classical Classical = True
+  (==) Intuitionistic Intuitionistic = True
+  (==) _ _ = False
 
-  NegI : Derivation (f::as) Bot -> Derivation as (Not f)
-  NegE : Derivation as f -> Derivation bs (Not f) -> Derivation (as ++ bs) Bot
+Ord Strength where
+  (<) Minimal Intuitionistic = True
+  (<) Minimal Classical = True
+  (<) Intuitionistic Classical = True
+  (<) _ _ = False
 
-  AndEL : Derivation as (And f g) -> Derivation as f
-  AndER : Derivation as (And f g) -> Derivation as g
-  AndI  : Derivation as f -> Derivation bs g -> Derivation (as ++ bs) (And f g)
+Weakest : Strength
+Weakest = Minimal
 
-  OrE  : Derivation (f::bs) h -> Derivation (g::cs) h -> Derivation as (Or f g) -> Derivation (bs ++ cs ++ as) h
-  OrIL : (g : Formula) -> Derivation as f -> Derivation as (Or g f)
-  OrIR : (g : Formula) -> Derivation as f -> Derivation as (Or f g)
+data Derivation : List Formula -> Strength -> Formula -> Type where
+  Empty : Derivation [] Weakest Top
 
-  ImpE : Derivation as f -> Derivation bs (If f g) -> Derivation (as ++ bs) g
-  ImpI : Derivation (f :: as) g -> Derivation as (If f g)
+  HeadAsmp : (n : Nat) -> Derivation as s f -> Derivation (headNth n as) s f
+
+  NegI : Derivation (f::as) s Bot -> Derivation as s (Not f)
+  NegE : Derivation as s f -> Derivation bs s (Not f) -> Derivation (as ++ bs) s Bot
+
+  AndEL : Derivation as s (And f g) -> Derivation as s f
+  AndER : Derivation as s (And f g) -> Derivation as s g
+  AndI  : Derivation as s f -> Derivation bs s g -> Derivation (as ++ bs) s (And f g)
+
+  OrE  : Derivation (f::bs) s h -> Derivation (g::cs) t h -> Derivation as u (Or f g) -> Derivation (bs ++ cs ++ as) (max (max s t) u) h
+  OrIL : (g : Formula) -> Derivation as s f -> Derivation as s (Or g f)
+  OrIR : (g : Formula) -> Derivation as s f -> Derivation as s (Or f g)
+
+  ImpE : Derivation as s f -> Derivation bs s (If f g) -> Derivation (as ++ bs) s g
+  ImpI : Derivation (f :: as) s g -> Derivation as s (If f g)
 
   -- structural rules
-  THIN : Derivation as f -> Derivation bs g -> Derivation as f
-  Assume : (g : Formula) -> Derivation as f -> Derivation (g :: as) g
+  THIN : Derivation as s f -> Derivation bs s g -> Derivation as s f
+  Assume : (g : Formula) -> Derivation as s f -> Derivation (g :: as) s g
 
   -- intuitionistic rules
-  EFQ : (f : Formula) -> Derivation as Bot -> Derivation as f
+  EFQ : (f : Formula) -> Derivation as s Bot -> Derivation as (max s Intuitionistic) f
 
   -- 'classical' rules
-  TNDL : (a : Formula) -> Derivation as f -> Derivation as (Or a (Not a))
-  TNDR : (a : Formula) -> Derivation as f -> Derivation as (Or (Not a) a)
+  TNDL : (a : Formula) -> Derivation as _ f -> Derivation as Classical (Or a (Not a))
+  TNDR : (a : Formula) -> Derivation as _ f -> Derivation as Classical (Or (Not a) a)
 
-  CR  : Derivation ((Not p)::as) Bot -> Derivation as p
+  CR  : Derivation ((Not p)::as) _ Bot -> Derivation as Classical p
 
-data Step : List Formula -> (f : Formula) -> (g : Formula) -> Type where
-  Start     : Step [] Top Top
-  OneRule   : Step xs a b -> (Derivation xs b -> Derivation ys c) -> Step ys a c
-  TwoRule   : (Step xs a b, Step ys a c) -> (Derivation xs b -> Derivation ys c -> Derivation zs d) -> Step zs a d
-  ThreeRule : (Step xs a b, Step ys a c, Step zs a d) -> (Derivation xs b -> Derivation ys c -> Derivation zs d -> Derivation us e) -> Step us a e
+data Step : List Formula -> Strength -> (f : Formula) -> (g : Formula) -> Type where
+  Start     : Step [] Weakest Top Top
+  OneRule   : Step xs s a b -> (Derivation xs s b -> Derivation ys t c) -> Step ys (max s t) a c
+  TwoRule   : (Step xs s a b, Step ys t a c) -> (Derivation xs s b -> Derivation ys t c -> Derivation zs u d) -> Step zs (max (max s t) u) a d
+  ThreeRule : (Step xs s a b, Step ys t a c, Step zs u a d) -> (Derivation xs s b -> Derivation ys t c -> Derivation zs u d -> Derivation us v e) -> Step us (max (max (max s t) u) v) a e
 
-(~~) : Step xs a b -> (Derivation xs b -> Derivation ys c) -> Step ys a c
+(~~) : Step xs s a b -> (Derivation xs s b -> Derivation ys t c) -> Step ys (max s t) a c
 (~~) = OneRule
 
-(~~~) : (Step xs a b, Step ys a c) -> (Derivation xs b -> Derivation ys c -> Derivation zs d) -> Step zs a d
+(~~~) : (Step xs s a b, Step ys t a c) -> (Derivation xs s b -> Derivation ys t c -> Derivation zs u d) -> Step zs (max (max s t) u) a d
 (~~~) = TwoRule
 
-(~~~~) : (Step xs a b, Step ys a c, Step zs a d) -> (Derivation xs b -> Derivation ys c -> Derivation zs d -> Derivation us e) -> Step us a e
+(~~~~) : (Step xs s a b, Step ys t a c, Step zs u a d) -> (Derivation xs s b -> Derivation ys t c -> Derivation zs u d -> Derivation us v e) -> Step us (max (max (max s t) u) v) a e
 (~~~~) = ThreeRule
 
 infixl 5 ~~
 infixl 5 ~~~
 infixl 5 ~~~~
 
-⊢ : List Formula -> Formula -> Type
-⊢ = (flip Step) Top
+infixl 5 |?~
+infixl 5 |~
+infixl 5 |!~
+infixl 5 |.~
+infixl 5 ~?
 
-∵ : (Derivation [] Top -> Derivation ys c) -> Step ys Top c
-∵ f = OneRule Start f
+(|?-) : List Formula -> Strength -> Formula -> Type
+(|?-) = curry $ (flip . uncurry $ Step) Top
 
-ex1 : {p : Formula} -> [p] `⊢` (¬(¬ p))
+-- minimal derivation
+(|~) : List Formula -> Formula -> Type
+(|~) = (flip $ (flip Step) Minimal) Top
+
+-- intuitionistic derivation
+(|!~) : List Formula -> Formula -> Type
+(|!~) = (flip $ (flip Step) Intuitionistic) Top
+
+-- classical derivation
+(|.~) : List Formula -> Formula -> Type
+(|.~) = (flip $ (flip Step) Classical) Top
+
+∵ : (Derivation [] Weakest Top -> Derivation ys s c) -> Step ys (max Weakest s) Top c
+∵ = OneRule Start
+
+ex1 : {p : Formula} -> [p] |~ (¬(¬ p))
 ex1 = 
   (left, right)
   ~~~ NegE
@@ -112,23 +147,23 @@ ex1 =
   -- [¬ p, p] `⊢` ⊥
   ~~ NegI
   where
-    left : [p] `⊢` p
+    left : [p] |~ p
     left = ∵ (Assume p)
 
-    right : [¬ p] `⊢` ¬ p
+    right : [¬ p] |~ (¬ p)
     right = ∵ (Assume $ ¬ p)
 
-ex2 : {p : Formula} -> [¬ (¬ (¬ p))] `⊢` (¬ p)
+ex2 : {p : Formula} -> [¬ (¬ (¬ p))] |~ (¬ p)
 ex2 = 
   (ex1, right)
   ~~~ NegE
   -- [p, ¬ (¬ (¬ p))] `⊢` ⊥
   ~~ NegI
   where
-    right : [¬ (¬ (¬ p))] `⊢` (¬ (¬ (¬ p)))
+    right : [¬ (¬ (¬ p))] |~ (¬ (¬ (¬ p)))
     right = ∵ (Assume (¬ (¬ (¬ p))))
 
-ex3 : {p, q, r : Formula} -> [r, (r `→` q), p `→` (¬ q)] `⊢` (¬ p)
+ex3 : {p, q, r : Formula} -> [r, (r `→` q), p `→` (¬ q)] |~ (¬ p)
 ex3 =
   (left, right)
   ~~~ NegE
@@ -137,15 +172,15 @@ ex3 =
     -- [p, r, r `→` q, p `→` (¬ q)] `⊢` ⊥
   ~~ NegI
   where
-    left : [r, r `→` q] `⊢` q
+    left : [r, r `→` q] |~ q
     left = 
       (∵ $ Assume r, ∵ $ Assume (r `→` q)) ~~~ ImpE
 
-    right : [p, p `→` (¬ q)] `⊢` ¬ q
+    right : [p, p `→` (¬ q)] |~ ¬ q
     right =
       (∵ $ Assume p, ∵ $ Assume (p `→` (¬ q))) ~~~ ImpE
 
-ex4 : {p, q : Formula} -> [¬ p] `⊢` (p `→` q)
+ex4 : {p, q : Formula} -> [¬ p] |!~ (p `→` q)
 ex4 =
   (∵ $ Assume p, ∵ $ Assume (¬ p))
   ~~~ NegE
@@ -154,12 +189,12 @@ ex4 =
   -- [p, ¬ p] `⊢` q
   ~~ ImpI
 
-ex5 : {p, q : Formula} -> [] `⊢` ((p `→` q) `∨` (q `→` p))
+ex5 : {p, q : Formula} -> [] |.~ ((p `→` q) `∨` (q `→` p))
 ex5 =
-  (left, right, Start ~~ (TNDR p))
+  (left, middle, right)
   ~~~~ OrE
   where
-    left : [¬ p] `⊢` ((p `→` q) `∨` (q `→` p))
+    left : [¬ p] |!~ ((p `→` q) `∨` (q `→` p))
     left =
       (∵ $ Assume p, ∵ $ Assume (¬ p))
       ~~~ (NegE)
@@ -168,10 +203,10 @@ ex5 =
       -- [p, ¬ p] `⊢` q
       ~~ (ImpI)
       -- [¬ p] `⊢` (p `→` q)
-      ~~ (OrIR(q `→` p))
+      ~~ OrIR(q `→` p)
 
-    right : [p] `⊢` ((p `→` q) `∨` (q `→` p))
-    right =
+    middle : [p] |~ ((p `→` q) `∨` (q `→` p))
+    middle =
       ∵ (Assume q)
       -- [q] `⊢` q
       ~~(Assume p)
@@ -180,4 +215,7 @@ ex5 =
       -- [q, p] `⊢` p
       ~~(ImpI)
       -- [p] `⊢` (q `→` p)
-      ~~(OrIL(p `→` q))
+      ~~OrIL(p `→` q)
+
+    right : [] |.~ ((¬ p) `∨` p)
+    right = Start ~~ (TNDR p)
