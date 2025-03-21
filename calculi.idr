@@ -67,6 +67,7 @@ data Derivation : List Formula -> Strength -> Formula -> Type where
   Empty : Derivation [] Weakest Top
 
   HeadAsmp : (n : Nat) -> Derivation as s f -> Derivation (headNth n as) s f
+  DedupAsmp : Derivation (a::a::as) s f -> Derivation (a::as) s f
 
   NegI : Derivation (f::as) s Bot -> Derivation as s (Not f)
   NegE : Derivation as s f -> Derivation bs s (Not f) -> Derivation (as ++ bs) s Bot
@@ -120,8 +121,8 @@ infixl 5 |!~
 infixl 5 |.~
 infixl 5 ~?
 
-(|?-) : List Formula -> Strength -> Formula -> Type
-(|?-) = curry $ (flip . uncurry $ Step) Top
+(|?~) : List Formula -> Strength -> Formula -> Type
+(|?~) = curry $ (flip . uncurry $ Step) Top
 
 -- minimal derivation
 (|~) : List Formula -> Formula -> Type
@@ -138,6 +139,54 @@ infixl 5 ~?
 ∵ : (Derivation [] Weakest Top -> Derivation ys s c) -> Step ys (max Weakest s) Top c
 ∵ = OneRule Start
 
+l1 : {a, b : Formula} -> [a, a `→` b] |~ b
+l1 = (∵ (Assume a), ∵ (Assume (a `→` b)))
+  ~~~ ImpE
+
+-- derivation of intuitionistic axioms (shows completeness of calculus rules)
+ax1 : {p, q : Formula} -> [] |~ (p `→` (q `→` p))
+ax1 = ∵ (Assume q)
+  ~~ (Assume p)
+  ~~ (HeadAsmp 1)
+  ~~ ImpI
+  ~~ ImpI
+
+ax2 : {p, q, r : Formula} -> [] |~ ((p `→` (q `→` r)) `→` ((p `→` q) `→` (p `→` r)))
+ax2 = (l1 {a = p} {b = q}, l1 {a = p} {b = (q `→` r)})
+  ~~~ ImpE
+  ~~ (HeadAsmp 2)
+  ~~ DedupAsmp
+  ~~ ImpI
+  ~~ ImpI
+  ~~ ImpI
+
+ax3 : {p, q : Formula} -> [] |~ ((p `∧` q) `→` p)
+ax3 = ∵ (Assume (p `∧` q)) ~~ AndEL ~~ ImpI
+
+ax4 : {p, q : Formula} -> [] |~ ((p `∧` q) `→` q)
+ax4 = ∵ (Assume (p `∧` q)) ~~ AndER ~~ ImpI
+
+ax5 : {p, q : Formula} -> [] |~ (p `→` (p `∨` q))
+ax5 = ∵ (Assume p) ~~ (OrIR q) ~~ ImpI
+
+ax6 : {p, q : Formula} -> [] |~ (q `→` (p `∨` q))
+ax6 = ∵ (Assume q) ~~ (OrIL p) ~~ ImpI
+
+ax7 : {p, q, r : Formula} -> [] |~ ((p `→` q) `→` ((r `→` q) `→` ((p `∨` r) `→` q)))
+ax7 = (l1 {a=p} {b=q}, l1 {a=r} {b=q}, ∵ (Assume (p `∨` r)))
+  ~~~~ OrE
+  ~~ (HeadAsmp 1)
+  ~~ (HeadAsmp 2)
+  ~~ ImpI
+  ~~ ImpI
+  ~~ ImpI
+
+ax8 : {p : Formula} -> [] |!~ (⊥ `→` p)
+ax8 = ∵ (Assume ⊥)
+  ~~ (EFQ p)  -- this is the only non-minimal rule we use
+  ~~ ImpI
+
+-- some other example
 ex1 : {p : Formula} -> [p] |~ (¬(¬ p))
 ex1 = 
   (left, right)
