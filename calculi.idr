@@ -15,13 +15,13 @@ data Formula : Type where
 ¬ x = Not x
 
 → : Formula -> Formula -> Formula
-→ x y = If x y
+x `→` y = If x y
 
 ∧ : Formula -> Formula -> Formula
-∧ x y = And x y
+x `∧` y = And x y
 
 ∨ : Formula -> Formula -> Formula
-∨ x y = Or x y
+x `∨` y = Or x y
 
 ⊥ : Formula
 ⊥ = Bot
@@ -139,8 +139,8 @@ infixl 5 |.~
 ∵ : (Derivation [] Weakest Top -> Derivation ys s c) -> Step ys (max Weakest s) Top c
 ∵ = OneRule Start
 
-l1 : {a, b : Formula} -> [a, a `→` b] |~ b
-l1 = (∵ (Assume a), ∵ (Assume (a `→` b)))
+MP : {a, b : Formula} -> [a, a `→` b] |~ b
+MP = (∵ (Assume a), ∵ (Assume (a `→` b)))
   ~~~ ImpE
 
 -- derivation of intuitionistic axioms (shows completeness of calculus rules)
@@ -148,17 +148,14 @@ ax1 : {p, q : Formula} -> [] |~ (p `→` (q `→` p))
 ax1 = ∵ (Assume q)
   ~~ (Assume p)
   ~~ (HeadAsmp 1)
-  ~~ ImpI
-  ~~ ImpI
+  ~~ ImpI . ImpI
 
 ax2 : {p, q, r : Formula} -> [] |~ ((p `→` (q `→` r)) `→` ((p `→` q) `→` (p `→` r)))
-ax2 = (l1 {a = p} {b = q}, l1 {a = p} {b = (q `→` r)})
+ax2 = (MP, MP {b = (q `→` r)})
   ~~~ ImpE
   ~~ (HeadAsmp 2)
   ~~ DedupAsmp
-  ~~ ImpI
-  ~~ ImpI
-  ~~ ImpI
+  ~~ ImpI . ImpI . ImpI
 
 ax3 : {p, q : Formula} -> [] |~ ((p `∧` q) `→` p)
 ax3 = ∵ (Assume (p `∧` q)) ~~ AndEL ~~ ImpI
@@ -173,20 +170,18 @@ ax6 : {p, q : Formula} -> [] |~ (q `→` (p `∨` q))
 ax6 = ∵ (Assume q) ~~ (OrIL p) ~~ ImpI
 
 ax7 : {p, q, r : Formula} -> [] |~ ((p `→` q) `→` ((r `→` q) `→` ((p `∨` r) `→` q)))
-ax7 = (l1 {a=p} {b=q}, l1 {a=r} {b=q}, ∵ (Assume (p `∨` r)))
+ax7 = (MP, MP, ∵ (Assume (p `∨` r)))
   ~~~~ OrE
   ~~ (HeadAsmp 1)
   ~~ (HeadAsmp 2)
-  ~~ ImpI
-  ~~ ImpI
-  ~~ ImpI
+  ~~ ImpI . ImpI . ImpI
 
 ax8 : {p : Formula} -> [] |!~ (⊥ `→` p)
 ax8 = ∵ (Assume ⊥)
   ~~ (EFQ p)  -- this is the only non-minimal rule we use
   ~~ ImpI
 
--- some other example
+-- some other example 
 ex1 : {p : Formula} -> [p] |~ (¬(¬ p))
 ex1 = 
   (left, right)
@@ -214,20 +209,12 @@ ex2 =
 
 ex3 : {p, q, r : Formula} -> [r, (r `→` q), p `→` (¬ q)] |~ (¬ p)
 ex3 =
-  (left, right)
+  (MP, MP)
   ~~~ NegE
     -- [r, r `→` q, p, p `→` (¬ q)] `⊢` ⊥
   ~~ (HeadAsmp 2)
     -- [p, r, r `→` q, p `→` (¬ q)] `⊢` ⊥
   ~~ NegI
-  where
-    left : [r, r `→` q] |~ q
-    left = 
-      (∵ $ Assume r, ∵ $ Assume (r `→` q)) ~~~ ImpE
-
-    right : [p, p `→` (¬ q)] |~ ¬ q
-    right =
-      (∵ $ Assume p, ∵ $ Assume (p `→` (¬ q))) ~~~ ImpE
 
 ex4 : {p, q : Formula} -> [¬ p] |!~ (p `→` q)
 ex4 =
