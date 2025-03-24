@@ -28,9 +28,9 @@ x `∨` y = Or x y
 
 shiftN : Nat -> (l : List a) -> List a
 shiftN _ [] = []
-shiftN 0 b@(x :: xs) = b
-shiftN (S n) b@(x :: []) = [x]
-shiftN (S n) b@(x :: (y::ys)) = y :: (shiftN n (x::ys))
+shiftN 0 b = b
+shiftN (S n) (x :: []) = [x]
+shiftN (S n) (x :: (y::ys)) = y :: (shiftN n (x::ys))
 
 simpleShiftN : shiftN 3 [0, 1, 2, 3] = [1, 2, 3, 0]
 simpleShiftN = Refl
@@ -95,7 +95,6 @@ data Derivation : List Formula -> Strength -> Formula -> Type where
   TNDR : (a : Formula) -> Derivation as _ f -> Derivation as Classical (Or (Not a) a)
 
   CR  : Derivation ((Not p)::as) _ Bot -> Derivation as Classical p
-
 
 data Step : List Formula -> Strength -> (f : Formula) -> (g : Formula) -> Type where
   Start     : Step [] Weakest Top Top
@@ -233,11 +232,11 @@ ex5 =
     left : [¬ p] |!~ ((p `→` q) `∨` (q `→` p))
     left =
       (∵ $ Assume p, ∵ $ Assume (¬ p))
-      ~~~ (NegE)
+      ~~~ NegE
       -- [p, ¬ p] `⊢` ⊥
       ~~ (EFQ q)
       -- [p, ¬ p] `⊢` q
-      ~~ (ImpI)
+      ~~ ImpI
       -- [¬ p] `⊢` (p `→` q)
       ~~ OrIR(q `→` p)
 
@@ -245,13 +244,13 @@ ex5 =
     middle =
       ∵ (Assume q)
       -- [q] `⊢` q
-      ~~(Assume p)
+      ~~ (Assume p)
       -- [p, q] `⊢` p
-      ~~(HeadAsmp 1)
+      ~~ (HeadAsmp 1)
       -- [q, p] `⊢` p
-      ~~(ImpI)
+      ~~ ImpI
       -- [p] `⊢` (q `→` p)
-      ~~OrIL(p `→` q)
+      ~~ OrIL(p `→` q)
 
     right : [] |.~ ((¬ p) `∨` p)
     right = Start ~~ (TNDR p)
