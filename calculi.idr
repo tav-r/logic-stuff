@@ -2,255 +2,112 @@ import Data.List
 
 %default total
 
-data Formula : Type where
-  Atom  : Type -> Formula
-  And   : Formula -> Formula -> Formula
-  Or    : Formula -> Formula -> Formula
-  Not   : Formula -> Formula
-  If    : Formula -> Formula -> Formula
-  Top   : Formula
-  Bot   : Formula
+data Formula = Atom Type | Top | Bot | And Formula Formula |
+               Or Formula Formula | Implies Formula Formula
+
+infixl 5 &&
+infixl 4 ||
+infixr 3 =.>
+
+(&&) : Formula -> Formula -> Formula
+(&&) x y = And x y
+
+(||) : Formula -> Formula -> Formula
+(||) x y = Or x y
+
+(=.>) : Formula -> Formula -> Formula
+(=.>) x y = Implies x y
 
 ¬ : Formula -> Formula
-¬ x = Not x
+¬ x = x =.> Bot
 
-→ : Formula -> Formula -> Formula
-x `→` y = If x y
+data Contains : {a : Type} -> List a -> (x : a) -> Type where
+  First : Contains (a::as) a
+  Nth   : Contains xs x -> Contains (y::xs) x
 
-∧ : Formula -> Formula -> Formula
-x `∧` y = And x y
+discharge : (fs : List Formula) -> (f : Formula) -> Contains fs f -> List Formula
+discharge (_ :: as) f First = as
+discharge (y :: xs) f (Nth prf) = y :: (discharge xs f prf)
 
-∨ : Formula -> Formula -> Formula
-x `∨` y = Or x y
+data Derivation : List Formula -> Formula -> Type where
+  Assume : (xs : List Formula) -> {auto prf : NonEmpty xs} -> Derivation xs (head xs)
 
-⊥ : Formula
-⊥ = Bot
+  Cont   : (f : Formula) -> Derivation xs g -> {auto prf : Contains xs f} -> {auto _ : Contains (discharge xs f prf) f} -> Derivation (discharge xs f prf) g
 
-shiftN : Nat -> (l : List a) -> List a
-shiftN _ [] = []
-shiftN 0 b = b
-shiftN (S n) (x :: []) = [x]
-shiftN (S n) (x :: (y::ys)) = y :: (shiftN n (x::ys))
+  AndI   : Derivation xs f -> Derivation ys g -> Derivation (xs ++ ys) (f && g)
+  AndEL  : Derivation xs (f && g) -> Derivation xs f
+  AndER  : Derivation xs (f && g) -> Derivation xs g
 
-simpleShiftN : shiftN 3 [0, 1, 2, 3] = [1, 2, 3, 0]
-simpleShiftN = Refl
+  NegI   : (f : Formula) -> Derivation xs Bot -> {auto prf : Contains xs f} -> Derivation (discharge xs f prf) (¬ f)
 
-headNth : Nat -> (l : List a) -> List a
-headNth = (uncurry headNthHelp) . dup
-  where
-    headNthHelp : Nat -> Nat -> (l : List a) -> List a
-    headNthHelp k 0 l = l
-    headNthHelp k (S j) [] = []
-    headNthHelp k (S j) (x :: xs) = headNthHelp k j (shiftN k (x::xs))
+  OrIL   : (f : Formula) -> Derivation xs g -> Derivation xs (f || g)
+  OrIR   : (f : Formula) -> Derivation xs g -> Derivation xs (g || f)
+  OrE    : Derivation xs (f =.> h) -> Derivation ys (g =.> h) -> Derivation zs (f || g) -> Derivation (xs ++ ys ++ zs) h
 
-simpleHeadNth : headNth 3 [0, 1, 2, 3, 4, 5] = [3, 0, 1, 2, 4, 5]
-simpleHeadNth = Refl
+  ImpI   : (f : Formula) -> Derivation xs g -> {auto prf : Contains xs f} -> Derivation (discharge xs f prf) (f =.> g)
+  ImpE   : Derivation xs (a =.> b) -> Derivation ys a -> Derivation (xs ++ ys) b
 
-data Strength = Minimal | Intuitionistic | Classical
+  EFQ    : (f : Formula) -> Derivation xs Bot -> Derivation xs f
 
-Eq Strength where
-  (==) Minimal Minimal = True
-  (==) Classical Classical = True
-  (==) Intuitionistic Intuitionistic = True
-  (==) _ _ = False
+infixl 5 |-
 
-Ord Strength where
-  (<) Minimal Intuitionistic = True
-  (<) Minimal Classical = True
-  (<) Intuitionistic Classical = True
-  (<) _ _ = False
+(|-) : List Formula -> Formula -> Type
+(|-) = Derivation
 
-Weakest : Strength
-Weakest = Minimal
+MP : {a, b : Formula} -> [] |- (a =.> b) -> [] |- a -> [] |- b
+MP = ImpE
 
-data Derivation : List Formula -> Strength -> Formula -> Type where
-  Empty : Derivation [] Weakest Top
+int1 : {a, b : Formula} -> [] |- (a =.> b =.> a)
+int1 = ImpI a $
+      ImpI b $
+      Assume (a::[b])
 
-  HeadAsmp : (n : Nat) -> Derivation as s f -> Derivation (headNth n as) s f
-  DedupAsmp : Derivation (a::a::as) s f -> Derivation (a::as) s f
+int2 : {a, b, c : Formula} -> [] |- ((a =.> b =.> c) =.> ((a =.> b) =.> (a =.> c)))
+int2 = ImpI (a =.> (b =.> c)) $
+      ImpI (a =.> b) $
+      ImpI a $
+      Cont a $
+      ImpE (
+        ImpE (
+          Assume [a =.> b =.> c]
+        ) (
+          Assume [a]
+        )
+      ) (
+        ImpE (
+          Assume [a =.> b]
+        ) (
+          Assume [a]
+        )
+      )
 
-  NegI : Derivation (f::as) s Bot -> Derivation as s (Not f)
-  NegE : Derivation as s f -> Derivation bs s (Not f) -> Derivation (as ++ bs) s Bot
+int3 : {a, b : Formula} -> [] |- (a && b =.> a)
+int3 = ImpI (a && b) $
+      AndEL $
+      Assume ((a && b)::Nil)
 
-  AndEL : Derivation as s (And f g) -> Derivation as s f
-  AndER : Derivation as s (And f g) -> Derivation as s g
-  AndI  : Derivation as s f -> Derivation bs s g -> Derivation (as ++ bs) s (And f g)
+int4 : {a, b : Formula} -> [] |- (a && b =.> b)
+int4 = ImpI (a && b) $
+      AndER $
+      Assume $ ((a && b)::Nil)
 
-  OrE  : Derivation (f::bs) s h -> Derivation (g::cs) t h -> Derivation as u (Or f g) -> Derivation (bs ++ cs ++ as) (max (max s t) u) h
-  OrIL : (g : Formula) -> Derivation as s f -> Derivation as s (Or g f)
-  OrIR : (g : Formula) -> Derivation as s f -> Derivation as s (Or f g)
+int5 : {a, b : Formula} -> [] |- (a =.> a || b)
+int5 = ImpI a $ OrIR b $ Assume [a]
 
-  ImpE : Derivation as s f -> Derivation bs s (If f g) -> Derivation (as ++ bs) s g
-  ImpI : Derivation (f :: as) s g -> Derivation as s (If f g)
+int6 : {a, b : Formula} -> [] |- (b =.> a || b)
+int6 = ImpI b $ OrIL a $ Assume [b]
 
-  -- structural rules
-  THIN : Derivation as s f -> Derivation bs s g -> Derivation as s f
-  Assume : (g : Formula) -> Derivation as s f -> Derivation (g :: as) s g
+int7 : {a, b, c : Formula} -> [] |- ((a =.> b) =.> ((c =.> b) =.> (a || c =.> b)))
+int7 = ImpI (a =.> b) $
+      ImpI (c =.> b) $
+      ImpI (a || c) $
+      OrE (
+        Assume [a =.> b]
+      ) (
+        Assume [c =.> b]
+      ) (
+        Assume [a || c]
+      )
 
-  -- intuitionistic rules
-  EFQ : (f : Formula) -> Derivation as s Bot -> Derivation as (max s Intuitionistic) f
-
-  -- 'classical' rules
-  TNDL : (a : Formula) -> Derivation as _ f -> Derivation as Classical (Or a (Not a))
-  TNDR : (a : Formula) -> Derivation as _ f -> Derivation as Classical (Or (Not a) a)
-
-  CR  : Derivation ((Not p)::as) _ Bot -> Derivation as Classical p
-
-data Step : List Formula -> Strength -> (f : Formula) -> (g : Formula) -> Type where
-  Start     : Step [] Weakest Top Top
-  OneRule   : Step xs s a b -> (Derivation xs s b -> Derivation ys t c) -> Step ys (max s t) a c
-  TwoRule   : (Step xs s a b, Step ys t a c) -> (Derivation xs s b -> Derivation ys t c -> Derivation zs u d) -> Step zs (max (max s t) u) a d
-  ThreeRule : (Step xs s a b, Step ys t a c, Step zs u a d) -> (Derivation xs s b -> Derivation ys t c -> Derivation zs u d -> Derivation us v e) -> Step us (max (max (max s t) u) v) a e
-
-(~~) : Step xs s a b -> (Derivation xs s b -> Derivation ys t c) -> Step ys (max s t) a c
-(~~) = OneRule
-
-(~~~) : (Step xs s a b, Step ys t a c) -> (Derivation xs s b -> Derivation ys t c -> Derivation zs u d) -> Step zs (max (max s t) u) a d
-(~~~) = TwoRule
-
-(~~~~) : (Step xs s a b, Step ys t a c, Step zs u a d) -> (Derivation xs s b -> Derivation ys t c -> Derivation zs u d -> Derivation us v e) -> Step us (max (max (max s t) u) v) a e
-(~~~~) = ThreeRule
-
-infixl 5 ~~
-infixl 5 ~~~
-infixl 5 ~~~~
-
-infixl 5 |?~
-infixl 5 |~
-infixl 5 |!~
-infixl 5 |.~
-
-(|?~) : List Formula -> Strength -> Formula -> Type
-(|?~) = curry $ (flip . uncurry $ Step) Top
-
--- minimal derivation
-(|~) : List Formula -> Formula -> Type
-(|~) = (flip $ (flip Step) Minimal) Top
-
--- intuitionistic derivation
-(|!~) : List Formula -> Formula -> Type
-(|!~) = (flip $ (flip Step) Intuitionistic) Top
-
--- classical derivation
-(|.~) : List Formula -> Formula -> Type
-(|.~) = (flip $ (flip Step) Classical) Top
-
-∵ : (Derivation [] Weakest Top -> Derivation ys s c) -> Step ys (max Weakest s) Top c
-∵ = OneRule Start
-
-MP : {a, b : Formula} -> [a, a `→` b] |~ b
-MP = (∵ (Assume a), ∵ (Assume (a `→` b)))
-  ~~~ ImpE
-
--- derivation of intuitionistic axioms (shows completeness of calculus rules)
-ax1 : {p, q : Formula} -> [] |~ (p `→` (q `→` p))
-ax1 = ∵ (Assume q)
-  ~~ (Assume p)
-  ~~ (HeadAsmp 1)
-  ~~ ImpI . ImpI
-
-ax2 : {p, q, r : Formula} -> [] |~ ((p `→` (q `→` r)) `→` ((p `→` q) `→` (p `→` r)))
-ax2 = (MP, MP {b = (q `→` r)})
-  ~~~ ImpE
-  ~~ (HeadAsmp 2)
-  ~~ DedupAsmp
-  ~~ ImpI . ImpI . ImpI
-
-ax3 : {p, q : Formula} -> [] |~ ((p `∧` q) `→` p)
-ax3 = ∵ (Assume (p `∧` q)) ~~ AndEL ~~ ImpI
-
-ax4 : {p, q : Formula} -> [] |~ ((p `∧` q) `→` q)
-ax4 = ∵ (Assume (p `∧` q)) ~~ AndER ~~ ImpI
-
-ax5 : {p, q : Formula} -> [] |~ (p `→` (p `∨` q))
-ax5 = ∵ (Assume p) ~~ (OrIR q) ~~ ImpI
-
-ax6 : {p, q : Formula} -> [] |~ (q `→` (p `∨` q))
-ax6 = ∵ (Assume q) ~~ (OrIL p) ~~ ImpI
-
-ax7 : {p, q, r : Formula} -> [] |~ ((p `→` q) `→` ((r `→` q) `→` ((p `∨` r) `→` q)))
-ax7 = (MP, MP, ∵ (Assume (p `∨` r)))
-  ~~~~ OrE
-  ~~ (HeadAsmp 1)
-  ~~ (HeadAsmp 2)
-  ~~ ImpI . ImpI . ImpI
-
-ax8 : {p : Formula} -> [] |!~ (⊥ `→` p)
-ax8 = ∵ (Assume ⊥)
-  ~~ (EFQ p)  -- this is the only non-minimal rule we use
-  ~~ ImpI
-
--- some other example 
-ex1 : {p : Formula} -> [p] |~ (¬(¬ p))
-ex1 = 
-  (left, right)
-  ~~~ NegE
-  -- [p, ¬ p] `⊢` ⊥
-  ~~ (HeadAsmp 1)
-  -- [¬ p, p] `⊢` ⊥
-  ~~ NegI
-  where
-    left : [p] |~ p
-    left = ∵ (Assume p)
-
-    right : [¬ p] |~ (¬ p)
-    right = ∵ (Assume $ ¬ p)
-
-ex2 : {p : Formula} -> [¬ (¬ (¬ p))] |~ (¬ p)
-ex2 = 
-  (ex1, right)
-  ~~~ NegE
-  -- [p, ¬ (¬ (¬ p))] `⊢` ⊥
-  ~~ NegI
-  where
-    right : [¬ (¬ (¬ p))] |~ (¬ (¬ (¬ p)))
-    right = ∵ (Assume (¬ (¬ (¬ p))))
-
-ex3 : {p, q, r : Formula} -> [r, (r `→` q), p `→` (¬ q)] |~ (¬ p)
-ex3 =
-  (MP, MP)
-  ~~~ NegE
-    -- [r, r `→` q, p, p `→` (¬ q)] `⊢` ⊥
-  ~~ (HeadAsmp 2)
-    -- [p, r, r `→` q, p `→` (¬ q)] `⊢` ⊥
-  ~~ NegI
-
-ex4 : {p, q : Formula} -> [¬ p] |!~ (p `→` q)
-ex4 =
-  (∵ $ Assume p, ∵ $ Assume (¬ p))
-  ~~~ NegE
-  -- [p, ¬ p] `⊢` ⊥
-  ~~ (EFQ q)
-  -- [p, ¬ p] `⊢` q
-  ~~ ImpI
-
-ex5 : {p, q : Formula} -> [] |.~ ((p `→` q) `∨` (q `→` p))
-ex5 =
-  (left, middle, right)
-  ~~~~ OrE
-  where
-    left : [¬ p] |!~ ((p `→` q) `∨` (q `→` p))
-    left =
-      (∵ $ Assume p, ∵ $ Assume (¬ p))
-      ~~~ NegE
-      -- [p, ¬ p] `⊢` ⊥
-      ~~ (EFQ q)
-      -- [p, ¬ p] `⊢` q
-      ~~ ImpI
-      -- [¬ p] `⊢` (p `→` q)
-      ~~ OrIR(q `→` p)
-
-    middle : [p] |~ ((p `→` q) `∨` (q `→` p))
-    middle =
-      ∵ (Assume q)
-      -- [q] `⊢` q
-      ~~ (Assume p)
-      -- [p, q] `⊢` p
-      ~~ (HeadAsmp 1)
-      -- [q, p] `⊢` p
-      ~~ ImpI
-      -- [p] `⊢` (q `→` p)
-      ~~ OrIL(p `→` q)
-
-    right : [] |.~ ((¬ p) `∨` p)
-    right = Start ~~ (TNDR p)
+int8 : {a : Formula} -> [] |- (Bot =.> a)
+int8 = ImpI Bot $ EFQ a $ Assume [Bot]
